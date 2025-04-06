@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from .database import Database
 import sqlite3
 from typing import Optional
+from sqlite3 import Error as SQLiteError
 import logging
 # Logging sozlamalari
 logging.basicConfig(level=logging.INFO)
@@ -134,12 +135,55 @@ class PymentDatabase(Database):
         self.execute(query, (telegram_id,), commit=True)
         return True
 
-    def add_payment(self, telegram_id, amount, payment_date):
-        sql = """
-        INSERT INTO Payments (telegram_id, amount, payment_date) 
-        VALUES (?, ?, ?)
+    def add_payment(self, telegram_id: int, amount: float, payment_date: str,
+                    description: str = None) -> dict:
         """
-        self.execute(sql, (telegram_id, amount, payment_date), commit=True)
+        Adds a new payment record to the Payments table with additional details.
+
+        Args:
+            telegram_id (int): Telegram ID of the student
+            amount (float): Payment amount
+            payment_date (str): Date of payment in 'YYYY-MM-DD' format
+            description (str, optional): Additional payment notes
+
+        Returns:
+            dict: Result containing success status and payment_id or error message
+
+        Raises:
+            ValueError: If input parameters are invalid
+            SQLiteError: If database operation fails
+        """
+        try:
+            # Input validation
+            if not isinstance(telegram_id, int) or telegram_id <= 0:
+                raise ValueError("Telegram ID must be a positive integer")
+
+            if not isinstance(amount, (int, float)) or amount <= 0:
+                raise ValueError("Amount must be a positive number")
+
+            datetime.strptime(payment_date, "%Y-%m-%d")
+
+            # SQL query with returning clause (for SQLite 3.35+)
+            sql = """
+            INSERT INTO Payments (telegram_id, amount, payment_date, description) 
+            VALUES (?, ?, ?, ?)
+            RETURNING payment_id
+            """
+
+            params = (telegram_id, float(amount), payment_date, description)
+            payment_id = self.execute(sql, params, commit=True)
+
+            return {
+                "success": True,
+                "payment_id": payment_id[0] if payment_id else None
+            }
+
+        except ValueError as ve:
+            return {"success": False, "error": f"Validation error: {str(ve)}"}
+        except SQLiteError as se:
+            return {"success": False, "error": f"Database error: {str(se)}"}
+        except Exception as e:
+            return {"success": False, "error": f"Unexpected error: {str(e)}"}
 
     def get_payments_by_student_id(self, student_id: int):
         """Berilgan student ID bo‘yicha barcha to‘lovlarni qaytaradi"""

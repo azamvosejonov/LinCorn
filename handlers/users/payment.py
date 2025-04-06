@@ -320,42 +320,78 @@ async def enter_payment_date(message: types.Message, state: FSMContext):
 # ✅ 5️⃣ To‘lovni tasdiqlash va o‘quvchiga xabar yuborish
 @dp.message_handler(state=PaymentStates.waiting_for_date)
 async def confirm_payment(message: types.Message, state: FSMContext):
+    """
+    Handles payment date confirmation and processes the payment addition.
+
+    Args:
+        message: Telegram message object containing the date
+        state: FSMContext for managing conversation state
+    """
     payment_date = message.text.strip()
 
+    # Validate date format
     try:
-        datetime.strptime(payment_date, "%Y-%m-%d")  # Sana formatini tekshirish
+        datetime.strptime(payment_date, "%Y-%m-%d")
     except ValueError:
-        await message.answer("❌ Xato! Sanani `YYYY-MM-DD` formatida kiriting!")
+        await message.answer(
+            "❌ Xato! Iltimos, sanani to‘g‘ri formatda kiriting: `YYYY-MM-DD`\n"
+            "Masalan: 2025-04-06"
+        )
         return
 
-    data = await state.get_data()
-    student_id = data["student_id"]
-    full_name = data["full_name"]
-    group_id = data["group_id"]
-    amount = data["amount"]
+    # Get stored data from state
+    try:
+        data = await state.get_data()
+        student_id = data.get("student_id")
+        full_name = data.get("full_name")
+        group_id = data.get("group_id")
+        amount = data.get("amount")
 
-    if pyment_db.add_payment(student_id, amount,payment_date):
+        # Verify all required data is present
+        if not all([student_id, full_name, group_id, amount]):
+            await message.answer("❌ Xatolik! To‘lov ma’lumotlari to‘liq emas.")
+            await state.finish()
+            return
+
+        # Add payment to database
+        if pyment_db.add_payment(student_id, amount, payment_date):
+            # Format success message
+            success_message = (
+                "✅ *Yangi to‘lov muvaffaqiyatli qo‘shildi!*\n\n"
+                f"👤 *O‘quvchi:* {full_name}\n"
+                f"🎓 *Guruh:* {group_id}\n"
+                f"💰 *Summa:* {amount:,} so‘m\n"  # Added thousands separator
+                f"📅 *Sana:* {payment_date}"
+            )
+            await message.answer(success_message)
+
+            # Notify student
+            try:
+                student_notification = (
+                    "📢 Hurmatli o‘quvchi! Sizga yangi to‘lov qo‘shildi:\n\n"
+                    f"💰 Summa: {amount:,} so‘m\n"
+                    f"📅 Sana: {payment_date}\n\n"
+                    "Savollar bo‘lsa, administratorga murojaat qiling!"
+                )
+                await bot.send_message(student_id, student_notification)
+            except Exception as e:
+                await message.answer(
+                    f"⚠️ {full_name} ({group_id}) ga xabar yuborishda xatolik!\n"
+                    "Sabab: Foydalanuvchi botni bloklagan bo‘lishi mumkin."
+                )
+        else:
+            await message.answer(
+                "❌ Xatolik! To‘lov ma’lumotlar bazasiga qo‘shilmadi.\n"
+                "Iltimos, qayta urinib ko‘ring yoki administratorga murojaat qiling."
+            )
+
+    except Exception as e:
         await message.answer(
-            f"✅ *Yangi to‘lov qo‘shildi!*\n\n"
-            f"👤 *O‘quvchi:* {full_name}\n"
-            f"🎓 *Guruh:* {group_id}\n"
-            f"💰 *Summasi:* {amount} so`m\n"
-            f"📅 *Sana:* {payment_date}",
-            reply_markup=orqa_inline
+            "❌ Noma’lum xatolik yuz berdi!\n"
+            f"Xato tafsilotlari: {str(e)}"
         )
-
-        # ✅ O‘quvchiga yangi to‘lov haqida xabar yuborish
-        try:
-            await bot.send_message(student_id, f"📢 Sizga yangi to‘lov qo‘shildi:\n\n"
-                                               f"💰 Summa: {amount} so`m\n"
-                                               f"📅 Sana: {payment_date}")
-        except:
-            await message.answer(f"⚠️ {full_name} ({group_id}) ga xabar yuborilmadi! (Bot foydalanuvchini bloklagan bo‘lishi mumkin)")
-
-    else:
-        await message.answer("❌ Xatolik! To‘lov qo‘shilmadi.")
-
-    await state.finish()
+    finally:
+        await state.finish()
 
 
 @dp.message_handler(commands=["my_admin_payments"])
