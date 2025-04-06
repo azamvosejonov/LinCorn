@@ -1,7 +1,18 @@
 from datetime import datetime, timedelta
 from .database import Database
+import sqlite3
+from typing import Optional
+import logging
+# Logging sozlamalari
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 class PymentDatabase(Database):
+
+    def __init__(self, path_to_db="main.db"):
+        super().__init__(path_to_db)
+        self.conn = None
 
     def create_payments_table(self):
         sql = """
@@ -52,12 +63,58 @@ class PymentDatabase(Database):
 
     # ✅ 1 oy davomida to‘lov qilmaganlarni olish
     def get_due_payments(self):
-        one_month_ago = datetime.now() - timedelta(days=30)
+        from datetime import datetime, timedelta
+        threshold_date = datetime.now() - timedelta(days=30)
         sql = """
-        SELECT telegram_id FROM Payments 
-        WHERE status = 'pending' AND created_at <= ?
+        SELECT telegram_id, created_at, status 
+        FROM Payments 
+        WHERE created_at <= ?
         """
-        return self.execute(sql, (one_month_ago,), fetchall=True)
+        cursor = self.conn.cursor()
+        cursor.execute(sql, (threshold_date,))
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_payment_status(self, telegram_id: str) -> Optional[str]:
+        """
+        Foydalanuvchining oxirgi to‘lov holatini ma’lumotlar bazasidan qaytaradi.
+
+        Args:
+            telegram_id (str): Foydalanuvchining Telegram ID’si.
+
+        Returns:
+            Optional[str]: To‘lov holati ('pending', 'confirmed', 'rejected' yoki None, agar to‘lov topilmasa).
+
+        Raises:
+            sqlite3.Error: Agar ma’lumotlar bazasida xato yuz bersa, log qilinadi va None qaytariladi.
+        """
+        try:
+            # Oxirgi to‘lov holatini olish uchun SQL so‘rov
+            sql = """
+            SELECT status 
+            FROM Payments 
+            WHERE telegram_id = ? 
+            ORDER BY created_at DESC 
+            LIMIT 1
+            """
+            cursor = self.conn.cursor()
+            cursor.execute(sql, (telegram_id,))
+            result = cursor.fetchone()
+
+            if result:
+                status = result["status"]
+                logger.info(f"To‘lov holati topildi: telegram_id={telegram_id}, status={status}")
+                return status
+            else:
+                logger.info(f"To‘lov topilmadi: telegram_id={telegram_id}")
+                return None
+
+        except sqlite3.Error as e:
+            logger.error(f"Ma’lumotlar bazasida xato: telegram_id={telegram_id}, xato={str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Kutilmagan xato: telegram_id={telegram_id}, xato={str(e)}")
+            return None
+
 
     # ✅ Talaba "faol" yoki yo‘qligini tekshirish
     def is_student_active(self, telegram_id: int):
@@ -77,18 +134,12 @@ class PymentDatabase(Database):
         self.execute(query, (telegram_id,), commit=True)
         return True
 
-    def add_payment(self, telegram_id: int, amount: float, payment_date: str):
-        """Foydalanuvchining to‘lovini qo‘shish."""
-        try:
-            query = """
-            INSERT INTO Payments (telegram_id, amount, receipt, status, created_at, payment_date) 
-            VALUES (?, ?, ?, 'pending', CURRENT_TIMESTAMP, ?)
-            """
-            self.execute(query, (telegram_id, amount, payment_date), commit=True)
-            return True
-        except Exception as e:
-            print(f"❌ Xatolik: {e}")
-            return False
+    def add_payment(self, telegram_id, amount, payment_date):
+        sql = """
+        INSERT INTO Payments (telegram_id, amount, payment_date) 
+        VALUES (?, ?, ?)
+        """
+        self.execute(sql, (telegram_id, amount, payment_date), commit=True)
 
     def get_payments_by_student_id(self, student_id: int):
         """Berilgan student ID bo‘yicha barcha to‘lovlarni qaytaradi"""

@@ -1,13 +1,13 @@
-from aiogram import types
-from aiogram.dispatcher import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
-from datetime import datetime
 import asyncio
+import logging
+from datetime import timedelta
+
+from aiogram.types import CallbackQuery
+
 from keyboards.inline.admin import tolov_inline, orqa_inline
-from states.states import PaymentStates,PaymentAmountState
 from loader import dp, bot, admin_db, user_db
 from loader import pyment_db
-
+from states.states import PaymentStates, PaymentAmountState
 
 
 @dp.callback_query_handler(text='tolov')
@@ -17,6 +17,15 @@ async def oqtuvchi_malumotlar(call: CallbackQuery):
 
 
 # ✅ To‘lov qilish tugmasi
+from aiogram import types
+from aiogram.dispatcher import FSMContext
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from datetime import datetime
+
+
+
+
+# To‘lov so‘rovi
 @dp.callback_query_handler(text="tolov_q")
 async def payment_request(call: CallbackQuery):
     telegram_id = call.message.from_user.id
@@ -30,25 +39,29 @@ async def payment_request(call: CallbackQuery):
     )
     await call.message.answer("📢 To‘lov vaqtingiz keldi. Iltimos, to‘lovni amalga oshiring!", reply_markup=keyboard)
 
-# ✅ Karta raqami yuborish
+
+# Karta raqami yuborish
 @dp.callback_query_handler(lambda call: call.data == "pay_now")
 async def send_payment_details(call: CallbackQuery):
-    await call.message.answer("💳 To‘lov uchun karta raqami: 8600 1234 5678 9101\n\n✅ To‘lov qilganingizdan keyin chekni yuboring.")
+    await call.message.answer(
+        "💳 To‘lov uchun karta raqami: 8600 1234 5678 9101\n\n✅ To‘lov qilganingizdan keyin chekni yuboring.")
 
-# ✅ To‘lov chekini qabul qilish
+
+# To‘lov chekini qabul qilish
 @dp.message_handler(content_types=types.ContentType.PHOTO, state=None)
 async def handle_payment_receipt(message: types.Message, state: FSMContext):
     telegram_id = message.from_user.id
     file_id = message.photo[-1].file_id
 
-    # ✅ To‘lov chekini bazaga vaqtincha saqlash
+    # To‘lov chekini bazaga vaqtincha saqlash
     await state.update_data(file_id=file_id)
     await state.update_data(telegram_id=telegram_id)
 
     await message.answer("💰 Nechpul yubordingiz? Iltimos, summani faqat raqamlarda kiriting.")
-    await PaymentAmountState.waiting_for_amount.set()  # Keyingi bosqichga o‘tish
+    await PaymentAmountState.waiting_for_amount.set()
 
-# ✅ To‘lov summasini qabul qilish
+
+# To‘lov summasini qabul qilish
 @dp.message_handler(state=PaymentAmountState.waiting_for_amount)
 async def process_payment_amount(message: types.Message, state: FSMContext):
     amount = message.text.strip()
@@ -57,19 +70,19 @@ async def process_payment_amount(message: types.Message, state: FSMContext):
         await message.answer("❌ Xatolik! To‘lov summasini faqat raqamda kiriting.")
         return
 
-    amount = float(amount)  # Summani float shakliga o'tkazamiz
-    payment_date = datetime.now().strftime("%Y-%m-%d")  # Hozirgi sana
+    amount = float(amount)
+    payment_date = datetime.now().strftime("%Y-%m-%d")
 
     data = await state.get_data()
     telegram_id = data["telegram_id"]
     file_id = data["file_id"]
 
-    # ✅ To‘lovni bazaga saqlash
+    # To‘lovni bazaga saqlash
     pyment_db.add_payment(telegram_id, amount, payment_date)
 
     await message.answer(f"✅ Sizning {amount} so‘m to‘lovingiz qabul qilindi. Admin tekshiradi.")
 
-    # ✅ Adminlarga yuborish
+    # Adminlarga yuborish
     user_info = user_db.get_user_info(telegram_id)
     if user_info:
         full_name = user_info['full_name']
@@ -97,29 +110,31 @@ async def process_payment_amount(message: types.Message, state: FSMContext):
 
             await bot.send_photo(admin_id, file_id, caption=caption, parse_mode="Markdown", reply_markup=keyboard)
 
-    await state.finish()  # Holatni tugatamiz
+    await state.finish()
 
+
+# To‘lovni tasdiqlash
 @dp.callback_query_handler(lambda c: c.data.startswith("confirma_"))
 async def confirm_payment(callback_query: CallbackQuery):
     telegram_id = int(callback_query.data.split("_")[1])
 
-    # 🔄 Foydalanuvchi statusini "active" qilish
+    # Foydalanuvchi statusini "faol" qilish
     user_db.update_user_status(telegram_id, "faol")
+
+    # Payments jadvalida to‘lovni tasdiqlash
+    pyment_db.confirm_payment(telegram_id)
 
     await bot.answer_callback_query(callback_query.id, "✅ To‘lov tasdiqlandi!")
     await bot.send_message(telegram_id, "✅ Sizning to‘lovingiz tasdiqlandi. Kursdan foydalanishingiz mumkin!")
 
-# ❌ To‘lovni rad etish
+
+# To‘lovni rad etish (qo'shimcha funksiya)
 @dp.callback_query_handler(lambda c: c.data.startswith("reject_"))
 async def reject_payment(callback_query: CallbackQuery):
     telegram_id = int(callback_query.data.split("_")[1])
 
-    # 🔄 Foydalanuvchi statusini "inactive" qilish
-    user_db.update_user_status(telegram_id, "faolsiz")
-
     await bot.answer_callback_query(callback_query.id, "❌ To‘lov rad etildi!")
-    await bot.send_message(telegram_id, "❌ Sizning to‘lovingiz rad etildi. Iltimos, administrator bilan bog‘laning.")
-
+    await bot.send_message(telegram_id, "❌ Sizning to‘lovingiz rad etildi. Iltimos, qayta urinib ko‘ring.")
 # ✅ Foydalanuvchi to‘lov tarixini ko‘rishi
 @dp.callback_query_handler(text=['tolov_t'])
 async def show_my_payments(call:CallbackQuery):
@@ -358,37 +373,100 @@ async def show_admin_payments(message: types.Message):
 
     await message.answer(text, parse_mode="Markdown")
 
+# Logging sozlamalari
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-
-
-async def send_payment_reminders():
+async def send_payment_reminders(bot, pyment_db, user_db, interval_seconds: float = 3600.0):
     """
-    Har 24 soatda to‘lov muddati o‘tgan talabalarga eslatma yuborish va holatni yangilash.
+    Talabalarga to‘lov eslatmalarini yuborish va ularning holatini yangilash uchun doimiy ishlaydigan funksiya.
+
+    Args:
+        bot: Telegram bot obyekti.
+        pyment_db: To‘lovlar bilan ishlash uchun ma’lumotlar bazasi obyekti.
+        user_db: Foydalanuvchilar bilan ishlash uchun ma’lumotlar bazasi obyekti.
+        interval_seconds (float): Har bir tekshiruv orasidagi kutish vaqti (soniyalarda), default=3600 (1 soat).
     """
+    last_message_sent = {}
+
     while True:
-        # To‘lov muddati o‘tgan talabalarni olish
-        due_students = pyment_db.get_due_payments()
+        try:
+            current_time = datetime.now()
+            due_students = pyment_db.get_due_payments()
 
-        for student in due_students:
-            telegram_id = student["telegram_id"]
-            last_payment_date = student["created_at"]
-            user_status = user_db.get_user_status(telegram_id)
+            if not due_students:
+                logger.info("Hech qanday muddati o‘tgan to‘lov topilmadi.")
+                await asyncio.sleep(interval_seconds)
+                continue
 
-            # Joriy vaqt bilan oxirgi to‘lov sanasi orasidagi farqni hisoblash
-            import datetime
-            days_since_payment = (datetime.datetime.now() - last_payment_date).days
+            for student in due_students:
+                telegram_id = student.get("telegram_id")
+                last_payment_date = student.get("created_at")
 
-            # Agar 30 kundan oshgan bo‘lsa
-            if days_since_payment >= 30:
-                if user_status == "faolsiz":
-                    # Faolsiz talabalarga eslatma yuborish
-                    await bot.send_message(
-                        telegram_id,
-                        "📢 Hurmatli talaba, sizning to‘lovingiz muddati tugagan. Iltimos, to‘lovni amalga oshiring!"
-                    )
-                elif user_status == "faol":
-                    # Faol talabalarni faolsizga o‘tkazish
-                    user_db.update_user_status(telegram_id, "faolsiz")
+                if not telegram_id or not last_payment_date:
+                    logger.warning(f"Noto‘g‘ri ma’lumot: telegram_id={telegram_id}, created_at={last_payment_date}")
+                    continue
 
-        # 24 soat (86400 soniya) kutish
-        await asyncio.sleep(86400)
+                user_status = user_db.get_user_status(telegram_id)
+                if user_status is None:
+                    logger.warning(f"Foydalanuvchi holati topilmadi: telegram_id={telegram_id}")
+                    continue
+
+                days_since_payment = (current_time - last_payment_date).days
+                payment_status = pyment_db.get_payment_status(telegram_id)
+
+                # To‘lov "pending" bo‘lsa
+                if payment_status == "pending":
+                    try:
+                        user_db.update_user_status(telegram_id, "faolsiz")
+                        logger.info(f"To‘lov qilinganidan so‘ng holat yangilandi: telegram_id={telegram_id}, yangi holat=faolsiz")
+                        await bot.send_message(
+                            telegram_id,
+                            "📢 Hurmatli talaba, sizning to‘lovingiz qabul qilindi, lekin hali tasdiqlanmadi. "
+                            "Iltimos, admin tasdiqini kuting!"
+                        )
+                        await asyncio.sleep(1)
+                        await bot.send_message(
+                            telegram_id,
+                            "📢 Eslatma: To‘lov tasdiqlangach, kursdan foydalana olasiz!"
+                        )
+                        logger.info(f"Ikki marta eslatma yuborildi: telegram_id={telegram_id}")
+                    except Exception as e:
+                        logger.error(f"Xabar yuborishda xato: telegram_id={telegram_id}, xato={str(e)}")
+
+                # Agar holat "faolsiz" bo‘lsa, har kuni eslatma yuborish
+                elif user_status == "faolsiz":
+                    last_sent = last_message_sent.get(telegram_id)
+                    if last_sent is None or (current_time - last_sent) >= timedelta(days=1):
+                        try:
+                            await bot.send_message(
+                                telegram_id,
+                                "📢 Hurmatli talaba, sizning to‘lovingiz muddati tugagan. "
+                                "Iltimos, to‘lovni amalga oshiring!"
+                            )
+                            last_message_sent[telegram_id] = current_time
+                            logger.info(f"Kundalik eslatma yuborildi: telegram_id={telegram_id}")
+                        except Exception as e:
+                            logger.error(f"Xabar yuborishda xato: telegram_id={telegram_id}, xato={str(e)}")
+
+                # To‘lovdan keyin 30 kun o‘tgan bo‘lsa
+                elif days_since_payment >= 30:
+                    if user_status == "faol":
+                        try:
+                            user_db.update_user_status(telegram_id, "faolsiz")
+                            logger.info(f"Holat yangilandi: telegram_id={telegram_id}, yangi holat=faolsiz")
+                            await bot.send_message(
+                                telegram_id,
+                                "📢 Hurmatli talaba, sizning to‘lovingiz muddati 30 kundan oshdi. "
+                                "Iltimos, to‘lovni amalga oshiring!"
+                            )
+                            last_message_sent[telegram_id] = current_time
+                            logger.info(f"30 kun o‘tganligi sababli eslatma yuborildi: telegram_id={telegram_id}")
+                        except Exception as e:
+                            logger.error(f"Holatni yangilashda xato: telegram_id={telegram_id}, xato={str(e)}")
+
+            await asyncio.sleep(interval_seconds)
+
+        except Exception as e:
+            logger.error(f"Umumiy xato yuz berdi: {str(e)}")
+            await asyncio.sleep(5)
