@@ -30,7 +30,7 @@ async def korish_jadval(call: CallbackQuery):
                  f"⏳ <b>Boshlanish:</b> {jadval[2]}\n"
                  f"⏰ <b>Tugash:</b> {jadval[3]}\n")
 
-    await call.message.answer(text, parse_mode="HTML",reply_markup=orqa_inline)
+    await call.message.answer(text, parse_mode="HTML")
 
 
 
@@ -40,15 +40,15 @@ async def korish_jadval(call: CallbackQuery):
 
 @dp.callback_query_handler(lambda c: c.data == 's_javoblar')
 async def korish_jadval(call: CallbackQuery):
-    await call.message.answer("Telegram adminga murojat qiling: @azam_vosejonov",reply_markup=orqa_inline)
+    await call.message.answer("Telegram adminga murojat qiling: @azam_vosejonov")
 
 @dp.callback_query_handler(lambda c: c.data == 'qollab_quvvatlash')
 async def korish_jadval(call: CallbackQuery):
-    await call.message.answer("Murojat uchun telefon raqam: 990232323",reply_markup=orqa_inline)
+    await call.message.answer("Murojat uchun telefon raqam: 990232323")
 
 @dp.callback_query_handler(lambda c: c.data == 'bot_h')
 async def korish_jadval(call: CallbackQuery):
-    await call.message.answer("Bot lin cor",reply_markup=orqa_inline)
+    await call.message.answer("Bot lin cor")
 
 
 @dp.callback_query_handler(lambda c: c.data == 'elonlar')
@@ -64,13 +64,13 @@ async def show_user_messages(call: CallbackQuery):
     for message, sent_at in messages:
         text += f"\n🕰 {sent_at}\n📩 {message}\n"
 
-    await call.message.answer(text, parse_mode="HTML",reply_markup=orqa_inline)
+    await call.message.answer(text, parse_mode="HTML")
 
 
 
 @dp.callback_query_handler(lambda c: c.data == 'mening_tol')
 async def korish_jadval(call: CallbackQuery):
-    await call.message.answer("Mening to'lovlarim",reply_markup=tolovlar_inline)
+    await call.message.answer("Mening to'lovlarim")
 
 
 @dp.callback_query_handler(text='tolovlar_h')
@@ -80,11 +80,11 @@ async def check_user_status(call: CallbackQuery):
     user_status = user_db.get_student_statusi(telegram_id)
 
     if user_status == "faol":
-        await call.message.answer("✅ Siz faol foydalanuvchisiz. Qarzingiz yo‘q!",reply_markup=orqa_inline)
+        await call.message.answer("✅ Siz faol foydalanuvchisiz. Qarzingiz yo‘q!")
     elif user_status:
-        await call.message.answer(f"❌ Siz {user_status} holatidasiz. Iltimos, to‘lov qiling!",reply_markup=orqa_inline)
+        await call.message.answer(f"❌ Siz {user_status} holatidasiz. Iltimos, to‘lov qiling!")
     else:
-        await call.message.answer("⚠️ Siz ro‘yxatdan o‘tmagansiz yoki ma’lumotlar bazada topilmadi.",reply_markup=orqa_inline)
+        await call.message.answer("⚠️ Siz ro‘yxatdan o‘tmagansiz yoki ma’lumotlar bazada topilmadi.")
 
 @dp.callback_query_handler(lambda c: c.data == 'otgan_dars')
 async def show_past_lessons_one_day(call: CallbackQuery):
@@ -102,18 +102,18 @@ async def show_past_lessons_one_day(call: CallbackQuery):
                  f"⏳ <b>Boshlanish:</b> {jadval[2]}\n"
                  f"⏰ <b>Tugash:</b> {jadval[3]}\n")
 
-    await call.message.answer(text, parse_mode="HTML",reply_markup=orqa_inline)
+    await call.message.answer(text, parse_mode="HTML")
 
 @dp.callback_query_handler(lambda c: c.data == 'old_dars_ochirish')
 async def delete_old_lessons_handler(call: CallbackQuery):
     """1 soatdan ortiq vaqt bo‘lgan darslarni qo‘lda o‘chirish"""
     jadval_db.delete_old_lessons()
-    await call.message.answer("✅ 1 soatdan oshgan eski darslar o‘chirildi!",reply_markup=orqa_inline)
+    await call.message.answer("✅ 1 soatdan oshgan eski darslar o‘chirildi!")
 
 
 @dp.callback_query_handler(text="qollanma")
 async def qollanma(call: CallbackQuery):
-    await call.message.answer("Botdan",reply_markup=orqa_inline)
+    await call.message.answer("Botdan")
 
 @dp.callback_query_handler(text="orqali")
 async def orqali(call: CallbackQuery):
