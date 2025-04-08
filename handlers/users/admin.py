@@ -11,6 +11,7 @@ from aiogram.dispatcher.handler import CancelHandler
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 import asyncio
+from keyboards.inline.user import orqasi_inline
 
 
 
@@ -374,7 +375,7 @@ async def show_upcoming_lessons(call: CallbackQuery):
     await call.message.delete()
     lessons = jadval_db.get_upcoming_lessons()
     if not lessons:
-        await call.message.answer("📭 Kelgusi darslar mavjud emas!",reply_markup=orqa_inline)
+        await call.message.answer("📭 Kelgusi darslar mavjud emas!",reply_markup=orqasi_inline)
         return
 
     text = "📅 <b>Kelgusi darslar:</b>\n"
@@ -383,14 +384,14 @@ async def show_upcoming_lessons(call: CallbackQuery):
                  f"📅 <b>Sana:</b> {lesson[2]}\n"
                  f"⏳ <b>Boshlanish:</b> {lesson[3]}\n"
                  f"⏰ <b>Tugash:</b> {lesson[4]}\n")
-    await call.message.answer(text,reply_markup=orqa_inline)
+    await call.message.answer(text,reply_markup=orqasi_inline)
 
 @dp.callback_query_handler(lambda c: c.data == 'otgan_dars')
 async def show_past_lessons(call: CallbackQuery):
     await call.message.delete()
     lessons = jadval_db.get_past_lessons()
     if not lessons:
-        await call.message.answer("📭 O‘tgan darslar mavjud emas!",reply_markup=orqa_inline)
+        await call.message.answer("📭 O‘tgan darslar mavjud emas!",reply_markup=orqasi_inline)
         return
 
     text = "📅 <b>O‘tgan darslar:</b>\n"
@@ -399,7 +400,7 @@ async def show_past_lessons(call: CallbackQuery):
                  f"📅 <b>Sana:</b> {lesson[2]}\n"
                  f"⏳ <b>Boshlanish:</b> {lesson[3]}\n"
                  f"⏰ <b>Tugash:</b> {lesson[4]}\n")
-    await call.message.answer(text,reply_markup=orqa_inline)
+    await call.message.answer(text,reply_markup=orqasi_inline)
 
 
 @dp.callback_query_handler(text=['jadval_yangilash'])

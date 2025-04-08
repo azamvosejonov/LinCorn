@@ -81,7 +81,7 @@ yordam_inline = InlineKeyboardMarkup(
 )
 
 
-orqa_inline = InlineKeyboardMarkup(
+orqasi_inline = InlineKeyboardMarkup(
     inline_keyboard=[
         [
             InlineKeyboardButton(text="🔙 Orqaga", callback_data="orqali"),

@@ -4,16 +4,16 @@ from datetime import timedelta
 
 from aiogram.types import CallbackQuery
 
-from keyboards.inline.admin import tolov_inline, orqa_inline
+from keyboards.inline.user import tolovlar_inline, orqasi_inline
 from loader import dp, bot, admin_db, user_db
 from loader import pyment_db
 from states.states import PaymentStates, PaymentAmountState
 
 
-@dp.callback_query_handler(text='tolov')
+@dp.callback_query_handler(text='mening_tol')
 async def oqtuvchi_malumotlar(call: CallbackQuery):
     await call.message.delete()
-    await call.message.answer("Barcha ma'lumotlar!", reply_markup=tolov_inline)
+    await call.message.answer("Barcha ma'lumotlar!", reply_markup=tolovlar_inline)
 
 
 # ✅ To‘lov qilish tugmasi
@@ -219,7 +219,7 @@ async def show_active_users(call:CallbackQuery):
     active_users = user_db.get_active_users()  # Faqat "faol" foydalanuvchilarni olish
 
     if not active_users:
-        await call.message.answer("📢 Hozirda hech kim qarzdorlar yo`q.",reply_markup=orqa_inline)
+        await call.message.answer("📢 Hozirda hech kim qarzdorlar yo`q.",reply_markup=orqasi_inline)
         return
 
     keyboard = InlineKeyboardMarkup(row_width=1)
@@ -230,7 +230,7 @@ async def show_active_users(call:CallbackQuery):
         phone=user[3]
 
 
-        await call.message.answer(f"✅ Qarzdorligi yo`q foydalanuvchilar ro‘yxati:\n\n 🪪Ism-Familya: {full_name}\n 👥Gruh nomi: {group_id}\n 📞Tel: {phone}\n-------------------",reply_markup=orqa_inline)
+        await call.message.answer(f"✅ Qarzdorligi yo`q foydalanuvchilar ro‘yxati:\n\n 🪪Ism-Familya: {full_name}\n 👥Gruh nomi: {group_id}\n 📞Tel: {phone}\n-------------------",reply_markup=orqasi_inline)
 
 
 @dp.callback_query_handler(text="qarzni_korish")
@@ -239,7 +239,7 @@ async def show_inactive_users(call:CallbackQuery):
     inactive_users = user_db.get_inactive_users()  # Faqat "faolsiz" foydalanuvchilarni olish
 
     if not inactive_users:
-        await call.message.answer("📢 Hozirda barcha foydalanuvchilar qarzi yo`q!",reply_markup=orqa_inline)
+        await call.message.answer("📢 Hozirda barcha foydalanuvchilar qarzi yo`q!",reply_markup=orqasi_inline)
         return
 
     keyboard = InlineKeyboardMarkup(row_width=1)
@@ -249,7 +249,7 @@ async def show_inactive_users(call:CallbackQuery):
         group_id= user[2]
         phone= user[3]
 
-        await call.message.answer(f"🚫 Qarzdor foydalanuvchilar ro‘yxati:\n\n 🪪Ism-Familya: {full_name}\n 👥Gruh nomi: {group_id}\n 📞Tel: {phone}\n-------------------",reply_markup=orqa_inline)
+        await call.message.answer(f"🚫 Qarzdor foydalanuvchilar ro‘yxati:\n\n 🪪Ism-Familya: {full_name}\n 👥Gruh nomi: {group_id}\n 📞Tel: {phone}\n-------------------",reply_markup=orqasi_inline)
 
 
 # ✅ 1️⃣ O‘quvchi ismini kiritish
@@ -409,100 +409,124 @@ async def show_admin_payments(message: types.Message):
 
     await message.answer(text, parse_mode="Markdown")
 
-# Logging sozlamalari
+
+import asyncio
+from datetime import datetime, timedelta
+import logging
+
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-async def send_payment_reminders(bot, pyment_db, user_db, interval_seconds: float = 3600.0):
+async def send_payment_reminders(bot, pyment_db, user_db, interval_seconds: float = 86400.0):
     """
-    Talabalarga to‘lov eslatmalarini yuborish va ularning holatini yangilash uchun doimiy ishlaydigan funksiya.
+    Monitors payments and updates user status:
+    - Sends reminders every day to users who haven't paid
+    - Changes status from 'faol' to 'faolsiz' 30 days after last payment for users who have paid
 
     Args:
-        bot: Telegram bot obyekti.
-        pyment_db: To‘lovlar bilan ishlash uchun ma’lumotlar bazasi obyekti.
-        user_db: Foydalanuvchilar bilan ishlash uchun ma’lumotlar bazasi obyekti.
-        interval_seconds (float): Har bir tekshiruv orasidagi kutish vaqti (soniyalarda), default=3600 (1 soat).
+        bot: Telegram bot instance
+        pyment_db: Payment database instance
+        user_db: Student database instance
+        interval_seconds: Check interval in seconds (default: 86400.0 = 1 day)
     """
-    last_message_sent = {}
+    last_reminder_sent = {}
 
     while True:
         try:
             current_time = datetime.now()
-            due_students = pyment_db.get_due_payments()
 
-            if not due_students:
-                logger.info("Hech qanday muddati o‘tgan to‘lov topilmadi.")
-                await asyncio.sleep(interval_seconds)
-                continue
+            # Get all students
+            all_students = user_db.get_all_students()
 
-            for student in due_students:
-                telegram_id = student.get("telegram_id")
-                last_payment_date = student.get("created_at")
+            for student in all_students:
+                telegram_id = student[0]
 
-                if not telegram_id or not last_payment_date:
-                    logger.warning(f"Noto‘g‘ri ma’lumot: telegram_id={telegram_id}, created_at={last_payment_date}")
-                    continue
+                # Get last payment info
+                last_payment = pyment_db.get_payments_by_user(telegram_id)
 
-                user_status = user_db.get_user_status(telegram_id)
-                if user_status is None:
-                    logger.warning(f"Foydalanuvchi holati topilmadi: telegram_id={telegram_id}")
-                    continue
-
-                days_since_payment = (current_time - last_payment_date).days
-                payment_status = pyment_db.get_payment_status(telegram_id)
-
-                # To‘lov "pending" bo‘lsa
-                if payment_status == "pending":
-                    try:
+                # Case 1: No payments found
+                if not last_payment:
+                    user_status = user_db.get_user_status(telegram_id)
+                    if user_status != "faolsiz":
                         user_db.update_user_status(telegram_id, "faolsiz")
-                        logger.info(f"To‘lov qilinganidan so‘ng holat yangilandi: telegram_id={telegram_id}, yangi holat=faolsiz")
-                        await bot.send_message(
-                            telegram_id,
-                            "📢 Hurmatli talaba, sizning to‘lovingiz qabul qilindi, lekin hali tasdiqlanmadi. "
-                            "Iltimos, admin tasdiqini kuting!"
-                        )
-                        await asyncio.sleep(1)
-                        await bot.send_message(
-                            telegram_id,
-                            "📢 Eslatma: To‘lov tasdiqlangach, kursdan foydalana olasiz!"
-                        )
-                        logger.info(f"Ikki marta eslatma yuborildi: telegram_id={telegram_id}")
-                    except Exception as e:
-                        logger.error(f"Xabar yuborishda xato: telegram_id={telegram_id}, xato={str(e)}")
+                        logger.info(f"Status updated to 'faolsiz' due to no payments: telegram_id={telegram_id}")
 
-                # Agar holat "faolsiz" bo‘lsa, har kuni eslatma yuborish
-                elif user_status == "faolsiz":
-                    last_sent = last_message_sent.get(telegram_id)
-                    if last_sent is None or (current_time - last_sent) >= timedelta(days=1):
+                    # Send reminder every day to users who haven't paid
+                    last_sent = last_reminder_sent.get(telegram_id)
+                    if not last_sent or (current_time - last_sent) >= timedelta(days=1):  # Every day
                         try:
                             await bot.send_message(
                                 telegram_id,
-                                "📢 Hurmatli talaba, sizning to‘lovingiz muddati tugagan. "
-                                "Iltimos, to‘lovni amalga oshiring!"
+                                "📢 Hurmatli talaba! Siz hali to‘lov qilmagansiz. "
+                                "Iltimos, to‘lovni tez orada amalga oshiring!"
                             )
-                            last_message_sent[telegram_id] = current_time
-                            logger.info(f"Kundalik eslatma yuborildi: telegram_id={telegram_id}")
+                            last_reminder_sent[telegram_id] = current_time
+                            logger.info(f"Payment reminder sent: telegram_id={telegram_id}")
                         except Exception as e:
-                            logger.error(f"Xabar yuborishda xato: telegram_id={telegram_id}, xato={str(e)}")
+                            logger.error(f"Failed to send reminder: telegram_id={telegram_id}, error={str(e)}")
+                    continue
 
-                # To‘lovdan keyin 30 kun o‘tgan bo‘lsa
-                elif days_since_payment >= 30:
-                    if user_status == "faol":
+                # Case 2: User has payments, check the latest one
+                latest_payment = max(last_payment, key=lambda x: x[2])  # Get most recent payment by created_at
+                payment_date = latest_payment[2]  # created_at field
+                days_since_payment = (current_time - payment_date).days
+
+                # If payment is older than 30 days, change status to faolsiz
+                if days_since_payment >= 30:
+                    current_status = user_db.get_user_status(telegram_id)
+                    if current_status == "faol":
+                        user_db.update_user_status(telegram_id, "faolsiz")
+                        logger.info(f"Status changed to 'faolsiz' after 30 days: telegram_id={telegram_id}")
                         try:
-                            user_db.update_user_status(telegram_id, "faolsiz")
-                            logger.info(f"Holat yangilandi: telegram_id={telegram_id}, yangi holat=faolsiz")
                             await bot.send_message(
                                 telegram_id,
-                                "📢 Hurmatli talaba, sizning to‘lovingiz muddati 30 kundan oshdi. "
-                                "Iltimos, to‘lovni amalga oshiring!"
+                                "📢 Hurmatli talaba! Sizning oxirgi to‘lovingizdan 30 kun o‘tdi. "
+                                "Statusingiz 'faolsiz'ga o‘zgartirildi. Iltimos, yangi to‘lov qiling!"
                             )
-                            last_message_sent[telegram_id] = current_time
-                            logger.info(f"30 kun o‘tganligi sababli eslatma yuborildi: telegram_id={telegram_id}")
+                            last_reminder_sent[telegram_id] = current_time
+                            logger.info(f"30-day expiration notice sent: telegram_id={telegram_id}")
                         except Exception as e:
-                            logger.error(f"Holatni yangilashda xato: telegram_id={telegram_id}, xato={str(e)}")
+                            logger.error(f"Failed to send expiration notice: telegram_id={telegram_id}, error={str(e)}")
+                # No reminders for paid users unless their payment expires (handled above)
 
+            # Wait before next check
             await asyncio.sleep(interval_seconds)
 
         except Exception as e:
-            logger.error(f"Umumiy xato yuz berdi: {str(e)}")
-            await asyncio.sleep(5)
+            logger.error(f"Payment monitoring error: {str(e)}")
+            await asyncio.sleep(60)  # Wait 1 minute before retrying on error
+
+if __name__ == "__main__":
+    # Mock bot and DB classes for demonstration
+    class MockBot:
+        async def send_message(self, telegram_id, message):
+            print(f"Sending to {telegram_id}: {message}")
+
+    class MockPaymentDB:
+        def get_payments_by_user(self, telegram_id):
+            # Simulate one user with a payment and one without
+            if telegram_id == 123:
+                return []  # No payments for user 123
+            elif telegram_id == 456:
+                # Payment 35 days ago for user 456
+                return [(1000, "completed", datetime.now() - timedelta(days=35))]
+            return []
+
+    class MockUserDB:
+        def get_all_students(self):
+            return [(123, "User_123"), (456, "User_456")]
+
+        def get_user_status(self, telegram_id):
+            # Initial status for both users
+            return "faol"
+
+        def update_user_status(self, telegram_id, status):
+            print(f"Updated status for {telegram_id} to {status}")
+
+    bot = MockBot()
+    pyment_db = MockPaymentDB()
+    user_db = MockUserDB()
+
+    # Run the function
+    asyncio.run(send_payment_reminders(bot, pyment_db, user_db, interval_seconds=86400.0))

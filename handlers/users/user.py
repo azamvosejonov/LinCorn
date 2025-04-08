@@ -5,7 +5,7 @@ from aiogram.types import CallbackQuery
 from loader import dp,bot,jadval_db,user_db,pyment_db
 from states.states import oquvchi_qo,oquvchi_o,oquvchi_r,AddJadval,UpdateJadval,TolovStates
 from keyboards.default.status import oquvchi_button
-from keyboards.inline.user import tolovlar_inline,user_inline,darslar_inline,orqa_inline
+from keyboards.inline.user import tolovlar_inline,user_inline,darslar_inline
 from aiogram.dispatcher.filters import Text
 
 
