@@ -14,7 +14,10 @@ import asyncio
 from keyboards.inline.user import orqasi_inline
 
 
-
+@dp.callback_query_handler(text='tolov')
+async def tolov(call: CallbackQuery):
+    await call.message.delete()
+    await call.message.answer("Tolovlar ro'yxati!", reply_markup=tolov_inline)
 
 
 #-----------------------------O`QUVCHI------------------------------------------------------
